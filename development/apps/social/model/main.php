@@ -15,7 +15,7 @@ class Main
 		// Тут модель повинна бути допрацьована, щоб використовувати бази даних, тощо
 		$key = ''; // Ключ API телеграм
 		if(!$key) {
-			throw \Exception("No API key!");
+			throw new \Exception("No API key!");
 		}
 		$result = null;
 		//$chat = 0;
