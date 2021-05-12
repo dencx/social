@@ -13,57 +13,86 @@ class Main
 
 	private $model;
 
+	private function prepare(Mixed $var, Array $param):mixed {
+		$result = null;
+		if ($var) { //чи передано значення атрибуту
+			$result = $var;
+		} else { //якщо не передано - перевіримо чи він обов'язковий
+			if (!isset($param['required'])) {
+				if (isset($param['default']))
+					$result = $param['default'];
+				else
+					throw new \Exception($param['name'] . ' has no default value', 6);
+			}
+			else
+				throw new \Exception($param['name'], 1);
+		}
+		return $result;
+	}
+
+	private function run($method, $data):?array {
+		$result = null;
+		if (method_exists($this->model, $method)) {
+			$callback = [$this->model, $method];
+			$result = call_user_func_array($callback, $data);
+		} else throw new \Exception($method, 5);
+		return $result;
+	}
+
 	public function exec():?array {
-		include ROOT . '/model/config/patterns.php'; //підключаємо файл з паттернами
 		$result = null;
 		$url = $this->getVar('REQUEST_URI', 'e');
+		$url = explode('?', $url)[0];
 		$path = explode('/', $url);
 
 		if (isset($path[2]) && !strpos($path[1], '.')) { // Disallow directory changing
 			$file = ROOT . 'model/config/methods/' . $path[1] . '.php';
+			$method = $path[1] . $path[2];
 			if (file_exists($file)) {
 				include $file;
-				if (isset($methods[$path[2]])) {
+				if (isset($methods[$path[2]])) { //чи існує метод
 					$details = $methods[$path[2]];
-					$request = [];
-					foreach ($details['params'] as $param) {
-						$var = $this->getVar($param['name'], $param['source']);
-						// if ($var)
-						//	$request[$param['name']] = $var;
 
-						
-						if (!empty($var)) { //перевіряємо чи змінна не пуста
-							if(isset($param['pattern'])) { //перевіряємо чи встановлено паттерн
-								if(preg_match($patterns[$param['pattern']]['regex'], $var)) { //перевіряємо чи змінна відповідає встановленому паттерну
-									if(isset($patterns[$param['pattern']]['callback'])) //перевіряємо чи підтримується callback-функція та викликаємо її, якщо підтримується (присвоюємо нове значення змінній)
-										$var = preg_replace_callback($patterns[$param['pattern']]['regex'], $patterns[$param['pattern']]['callback'], $var);
-									$request[$param['name']] = $var;
-								} else 
-									throw new \Exception('REQUEST_INCORRECT'); //"некоректний запит"
-							} else 
-								$request[$param['name']] = $var;
-						} elseif (!$param['required']) { //перевіряємо чи параметр необовязковий до введення
-							if(isset($param['default'])) //перевіряємо чи існує значення за замовчуванням та присвоюємо це значення, якщо існує
-								$request[$param['name']] = $param['default']; 
-							else 
-								throw new \Exception('INTERNAL_ERROR'); //"внутрішня помилка"
+					$uniget = $this->getVar('uniroad');
 
-						} else {
-							throw new \Exception('REQUEST_INCOMPLETE'); //"неповний запит"
+					if ($uniget) { //якщо умова істинна - отриано запит від головного бота
+						$GLOBALS['uni.user'] = $this->getVar('user'); //хто надіслав повідомлення
+						$result = ($method == 'uniwebhook') ? [
+							'callback' => []
+						] : [];
+						$query = $this->getVar('query', 'p');
+						if (gettype($query) == 'string')
+							$query = json_decode($query, true);
+						$data = [];
+						foreach ($query as $task) {
+
+							foreach ($details['params'] as $param) {
+								$var = $this->getVar($param['name'], isset($param['source']) ? $param['source'] : 'p', from: $task);
+								$data[$param['name']] = $this->prepare($var, $param); 
+							}
+							if (isset($result['callback'])) {
+								$callback = $this->run($method, $data);
+								if ($callback)
+									$result['callback'][] = $callback;
+							}
+							else
+								$result[] = $this->run($method, $data);
+
 						}
-						
-							
+					} else { //якщо повідомлення не по uniroad
+						$data = [];
+						foreach ($details['params'] as $param) {
+							$var = $this->getVar($param['name'], isset($param['source']) ? $param['source'] : 'p');
+							$data[$param['name']] = $this->prepare($var, $param);
+						}
+						$result = $this->run($method, $data);
 					}
-					if (method_exists($this->model, $path[1] . $path[2])) {
-						$method = [$this->model, $path[1] . $path[2]];
-						$result = $method($request);
-					} /*else {
-						throw new \Exception('REQUEST_UNKNOWN'); //"метод не підтримується"
-					}*/
 
 				}
 
 			}
+			else
+				throw new \Exception("{$path[1]}.{$path[2]}", 5);
 		}
 
 		return $result;
@@ -73,10 +102,11 @@ class Main
 		// CORS configuration
 		$origin = $this -> getVar('HTTP_ORIGIN', 'e');
 		$front = $this -> getVar('FRONT', 'e');
+
 		foreach ( [$front] as $allowed )
 			if ( $origin == "https://$allowed") {
-				header( "Access-Control-Allow-Origin: $origin" );
-				header( 'Access-Control-Allow-Credentials: true' );
+				header("Access-Control-Allow-Origin: $origin");
+				header('Access-Control-Allow-Credentials: true');
 			}
 		$this->model = new \Model\Main;
 	}
