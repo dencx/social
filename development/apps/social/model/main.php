@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * User Controller
  *
@@ -11,24 +11,114 @@ class Main
 {
 	use \Library\Shared;
 
-	public function formsubmitAmbassador(array $data):?array {
-		// Тут модель повинна бути допрацьована, щоб використовувати бази даних, тощо
-		$key = ''; // Ключ API телеграм
-		if(!$key) {
-			throw new \Exception("No API key!");
-		}
+	public function uniwebhook(String $type = '', String $value = '', Int $code = 0):?array {
 		$result = null;
-		//$chat = 0;
-		$chat = 0;
-		$text = "Нова заявка в *Цифрові Амбасадори*:\n" . $data['firstname'] . ' '. $data['secondname']. ', '. $data['position'] . "\n*Зв'язок*: " . $data['phone'] . "\n*E-mail*: " . $data['email'];
-		$text = urlencode($text);
-		$answer = file_get_contents("https://api.telegram.org/bot$key/sendMessage?parse_mode=markdown&chat_id=$chat&text=$text");
-		$answer = json_decode($answer, true);
-		$result = ['message' => $answer['result']];
+		switch ($type) {
+			case 'message':
+				if ($value == 'вихід') {
+					$result = ['type' => 'context', 'set' => null];
+				} elseif ($value == '/start'){
+					$result = [
+						'to' => $GLOBALS['uni.user'],
+						'type' => 'message',
+						'value' => "Вітаємо! Сервіс `Подача заяв на соціальну стипендію`.",
+						'keyboard' => [
+							'inline' => true,
+							'buttons' => [
+								[['id' => 1, 'title' => 'Повернутися', 'request' => 'message', 'value' => 'вихід'],
+								['id' => 5, 'title' => 'Подати заяву']]
+							]
+						]
+					];
+				} elseif ($value == '/back') { 
+					$result = [
+						'to' => $GLOBALS['uni.user'],
+						'type' => 'message',
+						'value' => "Ви повертаєтесь до головного розділу",
+						'keyboard' => [
+							'inline' => true,
+							'buttons' => [
+								[['id' => 1, 'title' => 'Повернутися', 'request' => 'message', 'value' => 'вихід'],
+								['id' => 2, 'title' => 'Надати номер', 'request' => 'contact'],
+								['id' => 3, 'title' => 'Ввести підставу']]
+								//TODO: додати можливість прикріплювати копії довідок
+							]
+						]
+					];
+				}
+				else
+				$result = [
+					'to' => $GLOBALS['uni.user'],
+					'type' => 'message',
+					'value' => "Сервіс `Подача заяв на соціальну стипендію` отримав повідомлення $value"
+				];
+				break;
+			case 'click':
+					if ($code == 1) {
+						$result = ['type' => 'context', 'set' => null];
+					} elseif ($code == 2) {
+						$result = [
+							'to' => $GLOBALS['uni.user'],
+							'type' => 'message',
+							'value' => "Ви у новому розділі",
+							'keyboard' => [
+								'inline' => false,
+								'buttons' => [
+									[['id' => 1, 'title' => 'Повернутися', 'request' => 'message', 'value' => 'вихід'],
+									['id' => 2, 'title' => 'Надати номер', 'request' => 'contact']]
+								]
+							]
+						];
+					} elseif ($code == 3) {
+						$result = [
+							'to' => $GLOBALS['uni.user'],
+							'type' => 'message',
+							'value' => "Функція поки що не реалізована"
+						];
+
+					} else {
+						$result = [
+							'to' => $GLOBALS['uni.user'],
+							'type' => 'message',
+							'value' => "Оберіть дію",
+							'keyboard' => [
+								'inline' => true,
+								'buttons' => [
+									[['id' => 1, 'title' => 'Повернутися', 'request' => 'message', 'value' => 'вихід'],
+									['id' => 2, 'title' => 'Надати номер', 'request' => 'contact'],
+									['id' => 3, 'title' => 'Ввести підставу']]
+								]
+							]
+						];
+					}
+					break;
+			case 'contact':
+					$result = [
+						'to' => $GLOBALS['uni.user'],
+						'type' => 'message',
+						'value' => "Сервіс `Подача заяв на соціальну стипендію`. Отримано номер $value"
+					];
+					break;
+		}
+
+		return $result;
+	}
+
+	public function formsubmitAmbassador(String $firstname, String $secondname, String $phone, String $position = ''):?array {
+		$result = null;
+		$chat = 891022220;
+		$this->TG->alert("Нова заявка в *Цифрові Амбасадори*:\n$firstname $secondname, $position\n*Зв'язок*: $phone");
+		$result = [];
 		return $result;
 	}
 
 	public function __construct() {
-
+		$this->db = new \Library\MySQL('core',
+			\Library\MySQL::connect(
+				$this->getVar('DB_HOST', 'e'),
+				$this->getVar('DB_USER', 'e'),
+				$this->getVar('DB_PASS', 'e')
+			) );
+		$this->setDB($this->db);
 	}
 }
